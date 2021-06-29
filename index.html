@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+  <title>Icehockey</title>
+</head>
+<body>
+<script type="module">
+  import { intersects } from './circleIntersection.js'
+  import { distance } from './distance.js'
+
+  class Icehockey {
+    constructor() {
+
+    }
+
+    async run() {
+      this.pockeySticks = [
+        new PockeyStick(),
+        new PockeyStick(),
+      ]
+      const slider = new Slider()
+      const renderer = new Renderer()
+      document.body.appendChild(renderer.canvas)
+
+      slider._x = renderer.canvas.width / 2
+      slider._y = renderer.canvas.height / 2
+
+      // movement of human controller pockey stick
+      window.addEventListener('pointermove', (event) => {
+        const mouseX = event.clientX
+        const mouseY = event.clientY
+        const {x: canvasX, y: canvasY} = renderer.canvas.getBoundingClientRect()
+        const position = {
+          x: mouseX - canvasX,
+          y: mouseY - canvasY
+        }
+        this.pockeySticks[1].move(position)
+      })
+
+      const render = () => {
+        renderer.render(this.pockeySticks, slider)
+      }
+
+      render()
+
+      const onTick = () => {
+        const pockeyStick = this.pockeySticks[1]
+        if (intersects(pockeyStick, slider)) {
+          const direction = Math.atan2(
+            slider.y - pockeyStick.y,
+            slider.x - pockeyStick.x
+          )
+          const _distance = distance(pockeyStick, slider)
+          const moveDistance = (pockeyStick.radius + slider.radius) - _distance
+          const position = {
+            x: slider.x + moveDistance * Math.cos(direction),
+            y: slider.y + moveDistance * Math.sin(direction)
+          }
+          slider.move(position)
+
+          slider.kineticForce = {
+            direction,
+            amount: 1
+          }
+        }
+
+        move()
+
+        console.log(pockeyStick.kineticForce.amount)
+
+        render()
+
+        scheduleNextTick()
+      }
+
+      function move() {
+        moveSlider(slider)
+      }
+
+      function moveSlider(slider) {
+        const {amount, direction} = slider.kineticForce
+        slider.move({
+          x: slider.x + amount * Math.cos(direction),
+          y: slider.y + amount * Math.sin(direction)
+        })
+      }
+
+      function scheduleNextTick() {
+        requestAnimationFrame(onTick)
+      }
+
+      scheduleNextTick()
+    }
+  }
+
+  class RoundMovableObject {
+    constructor() {
+      this._x = 0
+      this._y = 0
+      this.radius = 1
+      this.kineticForce = {
+        direction: 0,  // in radian
+        amount: 0
+      }
+    }
+
+    get x() {
+      return this._x
+    }
+
+    get y() {
+      return this._y
+    }
+
+    move({x, y}) {
+      this._x = x
+      this._y = y
+    }
+  }
+
+  class PockeyStick extends RoundMovableObject {
+    constructor() {
+      super()
+      this.radius = 16
+      this._lastMoveUpdate = new Date()
+    }
+
+    move({x, y}) {
+      const now = new Date()
+      const timeEllapsed = now - this._lastMoveUpdate
+      this._updateKineticForce({x: this._x, y: this._y}, {x, y}, timeEllapsed)
+      this._lastMoveUpdate = now
+      super.move({x, y})
+    }
+
+    _updateKineticForce(oldPosition, newPosition, timeEllapsed) {
+      if (timeEllapsed > 0) {
+        this.kineticForce = {
+          direction: Math.atan2(
+            newPosition.y - oldPosition.y,
+            newPosition.x - oldPosition.x
+          ),
+          amount: distance(oldPosition, newPosition) / timeEllapsed
+        }
+      }
+    }
+  }
+
+  class Slider extends RoundMovableObject {
+    constructor() {
+      super()
+      this.radius = 7
+    }
+  }
+
+  class Renderer {
+    constructor() {
+      this.canvas = document.createElement('canvas')
+      this.canvas.height = 8 * 16
+      this.canvas.width = 2.5 * this.canvas.height
+      this.context = this.canvas.getContext('2d')
+
+      this.renderPockeyStick = this.renderPockeyStick.bind(this)
+    }
+
+    render(pockeySticks, slider) {
+      this.renderArena()
+      this.renderSlider(slider)
+      pockeySticks.forEach(this.renderPockeyStick)
+    }
+
+    renderArena() {
+      this.context.fillStyle = '#cbeef9'
+      // TODO: round corners
+      this.context.fillRect(0, 0, this.canvas.width, this.canvas.height)
+    }
+
+    renderSlider(slider) {
+      this.context.fillStyle = 'black'
+      this.context.beginPath()
+      this.context.arc(
+        slider.x,
+        slider.y,
+        slider.radius,
+        0,
+        2 * Math.PI
+      )
+      this.context.fill()
+    }
+
+    renderPockeyStick(pockeyStick) {
+      this.context.fillStyle = 'red'
+      this.context.beginPath()
+      this.context.arc(
+        pockeyStick.x,
+        pockeyStick.y,
+        pockeyStick.radius,
+        0,
+        2 * Math.PI
+      )
+      this.context.fill()
+
+      this.context.fillStyle = 'darkred'
+      this.context.beginPath()
+      this.context.arc(pockeyStick.x, pockeyStick.y, 8, 0, 2 * Math.PI)
+      this.context.fill()
+    }
+  }
+
+  const icehockey = new Icehockey()
+  icehockey.run()
+</script>
+</body>
+</html>
